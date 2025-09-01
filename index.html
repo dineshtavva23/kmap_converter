@@ -734,13 +734,17 @@
             const plainText = simplified.replace(/'/g, "'").replace(/\+/g, ' + ');
             document.getElementById('booleanExpression').textContent = `F = ${plainText}`;
 
-            // Display LaTeX version
-            const latexExpression = simplified
-                .replace(/'/g, "\\overline{$&")
-                .replace(/([A-E])\\/g, "\\overline{$1}")
-                .replace(/([A-E])\+/g, "$1 + ")
-                .replace(/([A-E])([A-E])/g, "$1 \\cdot $2")
-                .replace(/\+ /g, " + ");
+            // Display LaTeX version - properly handle negation
+            let latexExpression = simplified;
+            
+            // First, handle negated variables (those followed by ')
+            latexExpression = latexExpression.replace(/([A-E])'/g, "\\overline{$1}");
+            
+            // Add multiplication symbols between adjacent variables/terms
+            latexExpression = latexExpression.replace(/([A-E}])([A-E\\])/g, "$1 \\cdot $2");
+            
+            // Clean up spacing around + operators
+            latexExpression = latexExpression.replace(/\s*\+\s*/g, " + ");
 
             document.getElementById('mathExpression').innerHTML = `$$F = ${latexExpression}$$`;
             MathJax.typesetPromise();
@@ -768,17 +772,12 @@
             } else {
                 const qm = new QuineMcCluskey(minterms, dontCares);
                 const simplified = qm.getSimplifiedExpression(currentVars);
+                
+                // Convert to Verilog syntax
                 expression = simplified
-                    .replace(/'/g, "")
-                    .replace(/([A-E])/g, function(match, p1, offset, string) {
-                        // Check if this variable is negated (preceded by ')
-                        if (offset > 0 && string[offset-1] === ')') {
-                            return `~${p1}`;
-                        }
-                        return p1;
-                    })
-                    .replace(/\+ /g, " | ")
-                    .replace(/([A-E])([A-E])/g, "$1 & $2");
+                    .replace(/([A-E])'/g, "~$1")  // Handle negation: A' -> ~A
+                    .replace(/\s*\+\s*/g, " | ")  // OR operations: + -> |
+                    .replace(/([A-E~])([A-E])/g, "$1 & $2");  // AND operations: AB -> A & B
             }
 
             const verilogCode = `module circuit(${inputs}, output F);
